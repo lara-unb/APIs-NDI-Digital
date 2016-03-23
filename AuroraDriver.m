@@ -17,7 +17,7 @@ classdef AuroraDriver < handle
     
     % Author: André Augusto Geraldes
     % Email: andregeraldes@lara.unb.br
-    % July 2015; Last revision:
+    % July 2015; Last revision: March 2016
     
     
  
