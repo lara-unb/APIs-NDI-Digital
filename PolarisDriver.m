@@ -307,7 +307,7 @@ classdef PolarisDriver < handle
             if(obj.device_init == 1)
                 
                 % Send a BX command for reading all sensors
-                obj.sendCommand(sprintf('BX %s', obj.TRANS_NOT_REPORTED)); % Possibly other BX reply option
+                obj.sendCommand(sprintf('BX %s', obj.TRANS_OUT_OF_VOL)); % Possibly other BX reply option
                 
                 % Error checking information
                 start_sequence = fread(obj.serial_port, 1, 'uint16');
