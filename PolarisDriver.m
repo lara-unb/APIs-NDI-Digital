@@ -30,12 +30,18 @@ classdef PolarisDriver < handle
         COMMAND_FORMAT_2 = 2;
         
         % Sensor reading options (source: Polaris_API_Guide page 47)
-        TRANSFORMATION_DATA = '0001'; % READ_OUT_OF_VOLUME_NOT_ALLOWED?
+        TRANSFORMATION_DATA = '0001'; 
         TOOL_AND_MARKER = '0002';
         SINGLE_PAS_STRAY_MARKER_POS = '0004';
         TOOL_MARKERS_POS = '0008';
-        TRANS_NOT_REPORTED     = '0800'; % 0801? READ_OUT_OF_VOLUME_ALLOWED?
-        ACT_STRAY_MARKERS_POS = '1000';
+        ACTIV_STRAY_MARKERS_POS = '1000';
+        
+        % Sensor reading options extended (source: Polaris_API_Guide page 55)
+        TRANS_OUT_OF_VOL     = '0801';
+        TOOL_MARK_OUT_OF_VOL    = '0802';
+        STRAY_POS_OUT_OF_VOL     = '0804';
+        TOOL_MARK_POS_OUT_OF_VOL     = '0808';
+        ACTIV_OUT_OF_VOL     = '1800';
         
         % Handle Status (source: Polaris_API_Guide page 48)
         SENSOR_STATUS_VALID    = '01';
@@ -71,7 +77,6 @@ classdef PolarisDriver < handle
         % Tracking mode options (source: Polaris_API_Guide page 142)
         TRACKING_OPTION_NONE                    = '';
         TRACKING_OPTION_RESET_COUNTER           = '80';
-        TRACKING_OPTION_FAST_MODE_RESET_COUNTER = 'C0'; % Not found in API_Guide?
         
     end
     
