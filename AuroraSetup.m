@@ -10,6 +10,7 @@ if(~isempty(serial_present))
     aurora_device.enablePortHandleDynamicAll();
     aurora_device.startTracking();
     aurora_device.BEEP('1');
+    aurora_device.stopTracking();
     delete(aurora_device);
     
 end
