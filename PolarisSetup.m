@@ -10,6 +10,7 @@ if(~isempty(serial_present))
     polaris_device.enablePortHandleDynamicAll();
     polaris_device.startTracking();
     polaris_device.BEEP('1');
+    polaris_device.stopTracking();
     delete(polaris_device);
     
 end
