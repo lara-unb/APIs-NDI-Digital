@@ -1,3 +1,17 @@
+% This script tests the basic functionalities of the PolarisDriver class.
+% It retrieves transformation data from one of the markers with an assigned
+% port handle and plots its orientation and translational data as a dual
+% quaternion, using the tools offered by the DQ Robotics library for
+% Matlab.
+%
+% DQ Robotics is an open-source (LGPLv3) standalone open-source Robotics
+% library by Bruno Vilhena Adorno and Murilo Marques Marinho. It provides
+% dual quaternion algebra, kinematic calculation algorithms in Python,
+% MATLAB and C++ that can be applied in robot control. The library has a
+% catkin package wrapper for use in ROS Indigo, and also provides a V-REP
+% interface.
+
+
 polaris_device = PolarisDriver('/dev/ttyUSB0'); % Creates the serial object
 serial_present = instrfind;
 
@@ -28,7 +42,7 @@ if(~isempty(serial_present))
     drawnow
     for iteration = 1:10000
         
-        polaris_device.updateSensorDataAll();
+        polaris_device.updateSensorDataAll(polaris_device.TRANS_OUT_OF_VOL);
         needle_rot = DQ(polaris_device.port_handles(1,3).rot);
         needle_trans = DQ([0 polaris_device.port_handles(1,3).trans]); % Different markers are stored in different indexes 
         if(any(polaris_device.port_handles(1,3).rot))
