@@ -20,7 +20,7 @@ classdef PolarisDriver < handle
     % July 2015; Last revision: March 2016
     
     
- 
+    
     
     % Constants
     properties (Constant)
@@ -30,18 +30,16 @@ classdef PolarisDriver < handle
         COMMAND_FORMAT_2 = 2;
         
         % Sensor reading options (source: Polaris_API_Guide page 47)
-        TRANSFORMATION_DATA = '0001'; 
+        TRANSFORMATION_DATA = '0001';
         TOOL_AND_MARKER = '0002';
-        SINGLE_PAS_STRAY_MARKER_POS = '0004';
+        SINGLE_ACT_STRAY_MARKER_POS = '0004';
         TOOL_MARKERS_POS = '0008';
-        ACTIV_STRAY_MARKERS_POS = '1000';
+        PAS_STRAY_MARKERS_POS = '1000';
+        
+        TRANS_OUT_OF_VOL = '0801';
         
         % Sensor reading options extended (source: Polaris_API_Guide page 55)
-        TRANS_OUT_OF_VOL     = '0801';
-        TOOL_MARK_OUT_OF_VOL    = '0802';
-        STRAY_POS_OUT_OF_VOL     = '0804';
-        TOOL_MARK_POS_OUT_OF_VOL     = '0808';
-        ACTIV_OUT_OF_VOL     = '1800';
+        REPORT_ALL_TRANS = '0800';
         
         % Handle Status (source: Polaris_API_Guide page 48)
         SENSOR_STATUS_VALID    = '01';
@@ -56,12 +54,12 @@ classdef PolarisDriver < handle
         BAUD_57600  = '4';
         BAUD_115200 = '5';
         BAUD_921600 = '6';
-        BAUD_1228739 = '7';   
-
+        BAUD_1228739 = '7';
+        
         % Tool tracking priority codes (source: Polaris_API_Guide page 86)
         TT_PRIORITY_STATIC  = 'S';
         TT_PRIORITY_DYNAMIC = 'D';
-        TT_PRIORITY_BUTTON  = 'B';        
+        TT_PRIORITY_BUTTON  = 'B';
         
         % PHSR Reply options (source: Polaris_API_Guide page 101)
         PHSR_HANDLES_ALL                      = '00';
@@ -126,20 +124,20 @@ classdef PolarisDriver < handle
         
         
         function setBaudRate(obj, baud_rate)
-        % setBaudRate(baud_rate)
-        %
-        % This function allows setting the Baud Rate of the serial port,
-        % but it assumes all the other configurations of the port are:
-        %   - Data bits = 8 bits
-        %   - Parity = None
-        %   - Stop bits = 1 bit
-        %   - Hardware handshaking = OFF
-        %
-        % If any of these settings needs changing, this function must be
-        % modified.
-        % 
-        % For further information on the serial port parameters, reffer to
-        % the Polaris_API_Guide page 58
+            % setBaudRate(baud_rate)
+            %
+            % This function allows setting the Baud Rate of the serial port,
+            % but it assumes all the other configurations of the port are:
+            %   - Data bits = 8 bits
+            %   - Parity = None
+            %   - Stop bits = 1 bit
+            %   - Hardware handshaking = OFF
+            %
+            % If any of these settings needs changing, this function must be
+            % modified.
+            %
+            % For further information on the serial port parameters, reffer to
+            % the Polaris_API_Guide page 58
             switch baud_rate
                 case 9600
                     baud_rate_code = obj.BAUD_9600;
@@ -173,42 +171,42 @@ classdef PolarisDriver < handle
         
         
         function init(obj)
-        %
-        % init()
-        %
-        % Initiate the Polaris SCU. This needs to be performed right after
-        % opening the serial port, for enabling all other functions.
+            %
+            % init()
+            %
+            % Initiate the Polaris SCU. This needs to be performed right after
+            % opening the serial port, for enabling all other functions.
             obj.INIT();
             obj.device_init = 1;
         end
         
         
         function startTracking(obj)
-        %
-        % startTracking()
-        %
-        % Puts the Polaris SCU into Tracking mode. This enables the position
-        % reading functions, but disables configuration functions. For
-        % further information, reffer to the Polaris_API_Guide page 3
+            %
+            % startTracking()
+            %
+            % Puts the Polaris SCU into Tracking mode. This enables the position
+            % reading functions, but disables configuration functions. For
+            % further information, reffer to the Polaris_API_Guide page 3
             obj.TSTART(obj.TRACKING_OPTION_RESET_COUNTER);
         end
         
         
         function stopTracking(obj)
-        %
-        % stopTracking()
-        %
-        % Puts the Polaris SCU back into Setup mode
+            %
+            % stopTracking()
+            %
+            % Puts the Polaris SCU back into Setup mode
             obj.TSTOP();
         end
         
         
         function detectAndAssignPortHandles(obj)
-        %
-        % detectAndAssignPortHandles()
-        %
-        % Retrieves the list of all available Port Handles, with their ID
-        % and Status, and initialize the port_handles member variable
+            %
+            % detectAndAssignPortHandles()
+            %
+            % Retrieves the list of all available Port Handles, with their ID
+            % and Status, and initialize the port_handles member variable
             reply = obj.PHSR(obj.PHSR_HANDLES_ALL);
             obj.n_port_handles = hex2dec(reply(1:2));
             for i_port_handle = 1:obj.n_port_handles
@@ -224,14 +222,51 @@ classdef PolarisDriver < handle
             
         end
         
-       
+        function tool_port = addWirelessTool(obj, file_name)
+            reply = obj.PHSR(obj.PHSR_HANDLES_ALL);
+            obj.n_port_handles = hex2dec(reply(1:2));
+            hardware_device = '********';
+            system_type = '*';
+            tool_type = '1';
+            port_numb = '**';
+            reply = obj.PHRQ(hardware_device,system_type,tool_type,port_numb);
+            id = reply(1:2);
+            
+            tool_file = dir(file_name);
+            file_size = tool_file.bytes;
+            FILE = fopen(file_name);
+            tool_data = fread(FILE, 'uint8');
+            if(mod(file_size, 64))
+                tool_data = padarray(tool_data,[0 (64 - mod(file_size, 64))], 'post');
+                file_size = file_size + (64 - mod(file_size, 64));
+            end
+            for start = 1:64:file_size
+                
+                obj.PVWR(id, dec2hex(start-1, 4), tool_data(start:start+63));
+                
+            end
+            
+            reply = obj.PHSR(obj.PHSR_HANDLES_ALL);
+            obj.n_port_handles = hex2dec(reply(1:2));
+            s = 3 + 5*(obj.n_port_handles - 1);
+            status = reply(s+2:s+4);
+            if(obj.n_port_handles == 1)
+                obj.port_handles = PortHandle(id, status);
+            else
+                obj.port_handles(1,obj.n_port_handles) = PortHandle(id, status);
+            end
+            tool_port = obj.n_port_handles;
+            
+        end
+        
+        
         function updatePortHandleStatusAll(obj)
-        %
-        % updatePortHandleStatusAll()
-        %
-        % Query the Polaris SCU for the current status of all available Port
-        % Handles and updates the Port Handle objects that have already been
-        % detected.
+            %
+            % updatePortHandleStatusAll()
+            %
+            % Query the Polaris SCU for the current status of all available Port
+            % Handles and updates the Port Handle objects that have already been
+            % detected.
             reply = obj.PHSR(obj.PHSR_HANDLES_ALL);
             n_found_port_handles = hex2dec(reply(1:2));
             for i_found_port_handle = 1:n_found_port_handles
@@ -250,20 +285,20 @@ classdef PolarisDriver < handle
         
         
         function initPortHandle(obj, port_handle_id)
-        %
-        % initPortHandle(port_handle_id)
-        %
-        % Init one Port Handle
+            %
+            % initPortHandle(port_handle_id)
+            %
+            % Init one Port Handle
             obj.PINIT(port_handle_id);
         end
         
         
         function initPortHandleAll(obj)
-        %
-        % initPortHandleAll()
-        %
-        % Init all Port Handles that have already been detected and update
-        % their status
+            %
+            % initPortHandleAll()
+            %
+            % Init all Port Handles that have already been detected and update
+            % their status
             for i_port_handle = 1:obj.n_port_handles
                 obj.initPortHandle(obj.port_handles(1,i_port_handle).id);
             end
@@ -272,20 +307,20 @@ classdef PolarisDriver < handle
         
         
         function enablePortHandleDynamic(obj, port_handle_id)
-        %
-        % enablePortHandleDynamic(port_handle_id)
-        %
-        % Enable one Port Handle
+            %
+            % enablePortHandleDynamic(port_handle_id)
+            %
+            % Enable one Port Handle
             obj.PENA(port_handle_id, obj.TT_PRIORITY_DYNAMIC);
         end
         
         
         function enablePortHandleDynamicAll(obj)
-        %
-        % enablePortHandleDynamicAll()
-        %
-        % Enable all Port Handles that have already been detected and
-        % update their status
+            %
+            % enablePortHandleDynamicAll()
+            %
+            % Enable all Port Handles that have already been detected and
+            % update their status
             for i_port_handle = 1:obj.n_port_handles
                 obj.enablePortHandleDynamic(obj.port_handles(1,i_port_handle).id);
             end
@@ -297,17 +332,26 @@ classdef PolarisDriver < handle
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         
         
-        function updateSensorDataAll(obj)
-        %
-        % updateSensorDataAll()
-        %
-        % Reads the current measurement of all sensors and update the
-        % corresponding Port Handle objects.
+        
+        function varargout = updateSensorDataAll(obj, varargin)
+            %
+            % updateSensorDataAll()
+            %
+            % Reads the current measurement of all sensors and update the
+            % corresponding Port Handle objects.
+            
+            if length(varargin)>1
+                reply_option = char(sum(char(varargin))-(length(varargin)-1)*48);
+            else
+                reply_option = cell2mat(varargin(1));
+            end
+            
+            output_counter = 1;
             
             if(obj.device_init == 1)
                 
                 % Send a BX command for reading all sensors
-                obj.sendCommand(sprintf('BX %s', obj.TRANS_OUT_OF_VOL)); % Possibly other BX reply option
+                obj.sendCommand(sprintf('BX %s', reply_option)); % Possibly other BX reply option
                 
                 % Error checking information
                 start_sequence = fread(obj.serial_port, 1, 'uint16');
@@ -339,39 +383,102 @@ classdef PolarisDriver < handle
                     % If the port is not disabled, read sensor data
                     if(strcmp(sensor_status, obj.SENSOR_STATUS_DISABLED) == 0)
                         
-                        % If the sensor status is valid, read its translation
-                        % and rotation data
-                        if(strcmp(sensor_status, obj.SENSOR_STATUS_VALID))
-                            q0 = fread(obj.serial_port, 1, 'float32');
-                            qX = fread(obj.serial_port, 1, 'float32');
-                            qY = fread(obj.serial_port, 1, 'float32');
-                            qZ = fread(obj.serial_port, 1, 'float32');
-                            rot = [q0 qX qY qZ];
+                        if(ismember(obj.TRANSFORMATION_DATA, varargin))
+                            % If the sensor status is valid, read its translation
+                            % and rotation data
+                            if(strcmp(sensor_status, obj.SENSOR_STATUS_VALID)||ismember(obj.REPORT_ALL_TRANS, varargin))
+                                q0 = fread(obj.serial_port, 1, 'float32');
+                                qX = fread(obj.serial_port, 1, 'float32');
+                                qY = fread(obj.serial_port, 1, 'float32');
+                                qZ = fread(obj.serial_port, 1, 'float32');
+                                rot = [q0 qX qY qZ];
+                                
+                                tX = fread(obj.serial_port, 1, 'float32');
+                                tY = fread(obj.serial_port, 1, 'float32');
+                                tZ = fread(obj.serial_port, 1, 'float32');
+                                trans = [tX tY tZ];
+                                
+                                error = fread(obj.serial_port, 1, 'float32');
+                                
+                                % Update the translation and rotation of the
+                                % corresponding Port Handle object
+                                obj.port_handles(1,handle_index).updateTrans(trans);
+                                obj.port_handles(1,handle_index).updateRot(rot);
+                                obj.port_handles(1,handle_index).updateError(error);
+                            end
                             
-                            tX = fread(obj.serial_port, 1, 'float32');
-                            tY = fread(obj.serial_port, 1, 'float32');
-                            tZ = fread(obj.serial_port, 1, 'float32');
-                            trans = [tX tY tZ];
+                            % Read the handle status and frame number
+                            handle_status = dec2hex(fread(obj.serial_port, 1, 'uint32'), 8);
+                            frame_number = fread(obj.serial_port, 1, 'uint32');
                             
-                            error = fread(obj.serial_port, 1, 'float32');
-                            
-                            % Update the translation and rotation of the
+                            % Update the status and frame_number of the
                             % corresponding Port Handle object
-                            obj.port_handles(1,handle_index).updateTrans(trans);
-                            obj.port_handles(1,handle_index).updateRot(rot);
-                            obj.port_handles(1,handle_index).updateError(error);
+                            obj.port_handles(1,handle_index).updateStatusComplete(handle_status);
+                            obj.port_handles(1,handle_index).updateFrameNumber(frame_number);
                         end
                         
-                        % Read the handle status and frame number
-                        handle_status = dec2hex(fread(obj.serial_port, 1, 'uint32'), 8);
-                        frame_number = fread(obj.serial_port, 1, 'uint32');
+                        if(ismember(obj.TOOL_AND_MARKER, varargin))
+                            tool_info = fread(obj.serial_port, 1, 'int8');
+                            bad_trans_fit = bitget(tool_info, 1, 'int8');
+                            not_enough_markers = bitget(tool_info, 2, 'int8');
+                            ir_interf = bitget(tool_info, 3, 'int8');
+                            fell_behind = bitget(tool_info, 4, 'int8');
+                            face_1 = bitget(tool_info, 5, 'int8');
+                            face_2 = bitget(tool_info, 6, 'int8');
+                            face_3 = bitget(tool_info, 7, 'int8');
+                            exception = bitget(tool_info, 8, 'int8');
+                            
+                            marker_info = fread(obj.serial_port, 10, 'int8');
+                        end
                         
-                        % Update the status and frame_number of the
-                        % corresponding Port Handle object
-                        obj.port_handles(1,handle_index).updateStatusComplete(handle_status);
-                        obj.port_handles(1,handle_index).updateFrameNumber(frame_number);
+                        if(ismember(obj.SINGLE_ACT_STRAY_MARKER_POS, varargin))
+                            stray_status = fread(obj.serial_port, 1, 'int8');
+                            valid_marker = bitget(stray_status, 1, 'int8');
+                            missing_marker = bitget(stray_status, 2, 'int8');
+                            out_vol_marker = bitget(stray_status, 4, 'int8');
+                            
+                            if(strcmp(sensor_status, obj.SENSOR_STATUS_VALID)||ismember(obj.REPORT_ALL_TRANS, varargin))
+                                marker_TX = fread(obj.serial_port, 1, 'float32');
+                                marker_TY = fread(obj.serial_port, 1, 'float32');
+                                marker_TZ = fread(obj.serial_port, 1, 'float32');
+                                transM = [marker_TX marker_TY marker_TZ];
+                                obj.port_handles(1,handle_index).updateTrans(transM);
+                            end
+                            
+                        end
+                        
+                        if(ismember(obj.TOOL_MARKERS_POS, varargin))
+                            marker_num = fread(obj.serial_port, 1, 'int8');
+                            marker_out_vol = fread(obj.serial_port, ceil(marker_num/8), 'int8');
+                            marker_TXn = fread(obj.serial_port, 1, 'float32');
+                            marker_TYn = fread(obj.serial_port, 1, 'float32');
+                            marker_TZn = fread(obj.serial_port, 1, 'float32');    
+                            transMn = [marker_TXn marker_TYn marker_TZn];
+                            obj.port_handles(1,handle_index).updateTrans(transMn);
+                        end
+                        
+                         
+                                               
+                    end
+                end
+                
+                if(ismember(obj.PAS_STRAY_MARKERS_POS, varargin))
+                    marker_num_p = fread(obj.serial_port, 1, 'int8');
+                    transMn_p = 0;
+                    if(marker_num_p)
+                        transMn_p = zeros(marker_num_p, 3);
+                        marker_out_vol_p = fread(obj.serial_port, ceil(marker_num_p/8), 'int8');
+                        for i = 1:marker_num_p
+                            marker_TXn_p = fread(obj.serial_port, 1, 'float32');
+                            marker_TYn_p = fread(obj.serial_port, 1, 'float32');
+                            marker_TZn_p = fread(obj.serial_port, 1, 'float32');
+                            transMn_p(i, :) = [marker_TXn_p marker_TYn_p marker_TZn_p];
+                        end
                         
                     end
+                    varargout{output_counter} = transMn_p;
+                    output_counter =+ 1;
+                    %obj.port_handles(1,handle_index).updateTrans(transMn_p);
                 end
                 
                 % More error checking information
@@ -383,7 +490,7 @@ classdef PolarisDriver < handle
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %     NEEDLE SPECIFIC FUNCTIONS        %
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%         
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         
         function status = readSensorStatus(obj)
             obj.updateSensorDataAll();
@@ -407,8 +514,8 @@ classdef PolarisDriver < handle
             end
         end
         
-        function sensor_available = isSensorAvailable(obj)            
-            if(obj.device_init == 1)                
+        function sensor_available = isSensorAvailable(obj)
+            if(obj.device_init == 1)
                 obj.updateSensorDataAll();
                 status = obj.port_handles(1,1).sensor_status;
                 if(strcmp(status, obj.SENSOR_STATUS_MISSING) || strcmp(status, obj.SENSOR_STATUS_DISABLED))
@@ -416,12 +523,12 @@ classdef PolarisDriver < handle
                 else
                     sensor_available = 1;
                 end
-            else                
+            else
                 sensor_available = 0;
-            end           
+            end
         end
-            
-            
+        
+        
         
     end
     
@@ -435,14 +542,14 @@ classdef PolarisDriver < handle
         
         
         function sendCommand(obj, command)
-        %
-        % sendCommand(command)
-        %
-        % This function receives a command as an entire formated string and
-        % sends it to the Polaris SCU. There are two formats for sending
-        % commands. Format 2 contains only the command, in string format.
-        % Format 1 contains also a CRC for error checking. For more
-        % information on that, check the Polaris_API_Guide page 4
+            %
+            % sendCommand(command)
+            %
+            % This function receives a command as an entire formated string and
+            % sends it to the Polaris SCU. There are two formats for sending
+            % commands. Format 2 contains only the command, in string format.
+            % Format 1 contains also a CRC for error checking. For more
+            % information on that, check the Polaris_API_Guide page 4
             if(obj.selected_command_format == obj.COMMAND_FORMAT_1)
                 % Option not implemented
                 % Format 1 should replace the ' ' character in the command
@@ -531,6 +638,10 @@ classdef PolarisDriver < handle
             reply = obj.sendCommandAndGetReply(sprintf('PHINF %s%s', port_handle, reply_option));
         end
         
+        function reply = PHRQ(obj, hardware_device, system_type, tool_type, port_number)
+            reply = obj.sendCommandAndGetReply(sprintf('PHRQ %s%s%s%s**', hardware_device, system_type, tool_type, port_number));
+        end
+        
         function reply = PHSR(obj, reply_option)
             reply = obj.sendCommandAndGetReply(sprintf('PHSR %s', reply_option));
         end
@@ -568,7 +679,19 @@ classdef PolarisDriver < handle
         end
         
         function reply = PVWR(obj, port_handle, start_address, tool_definition_data)
-            reply = obj.sendCommandAndGetReply(sprintf('PUWR %s%s%s', port_handle, start_address, tool_definition_data));
+            data_segment = '';
+            for it = 1:64
+                    byt = tool_definition_data(it);
+                    if(byt)
+                        if(byt<16)
+                            data_segment = strcat(data_segment, '0');
+                        end
+                        data_segment = strcat(data_segment, sprintf('%X', byt));
+                    else
+                        data_segment = strcat(data_segment, '00');
+                    end
+            end
+            reply = obj.sendCommandAndGetReply(sprintf('PVWR %s%s%s', port_handle, start_address, data_segment));
         end
         
         function reply = RESET(obj, reset_option)
@@ -615,7 +738,7 @@ classdef PolarisDriver < handle
             %
             % delete()
             %
-            % "Maybe I should send some cleanup commands to the Polaris SCU 
+            % "Maybe I should send some cleanup commands to the Polaris SCU
             % before closing the program." - Geraldes A.A.
             % Possible commands are:
             %   - PDIS for the Port Handles that have been enabled
@@ -624,9 +747,9 @@ classdef PolarisDriver < handle
             
             if(strcmp(obj.serial_port.Status, 'open'))
                 obj.RESET(obj.RESET_SOFT);
-                pause(3);   
+                pause(3);
                 obj.closeSerialPort();
-            end            
+            end
             
             delete(obj.serial_port);
         end
